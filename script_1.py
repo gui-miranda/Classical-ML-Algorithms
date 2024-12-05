@@ -10,6 +10,10 @@ import seaborn as sns
 import numpy as np
 import re
 from tableone import TableOne
+from factor_analyzer import FactorAnalyzer
+from factor_analyzer.factor_analyzer import calculate_bartlett_sphericity
+from factor_analyzer.factor_analyzer import calculate_kmo
+import pingouin as pg
 
 """ 1. Ingestão dos Dados """
 df_data = pd.read_csv("train.csv")  # dataframe com as principais features
@@ -130,3 +134,99 @@ for col in features_cols :
 df_quartiles['qtd_outliers'] = qtd_outliers  
 df_quartiles['percent_outliers'] =round((df_quartiles['qtd_outliers']/df.shape[0])*100,2)  
 df_quartiles = df_quartiles.sort_values(by = 'qtd_outliers',ascending = False).reset_index().drop('index',axis=1)
+
+
+""" 3. Algoritmos Não Supervisionados """
+
+""" 3.1 Redução de Dimensionalidade - PCA """
+
+features_cols.append("critical_temp","material")
+df = df[features_cols]
+
+
+# Testando a adequação e possibilidade de extração de componentes principais
+# nesse conjunto de dados, através do Teste de Bartllet.
+# O Teste de Bartllet avalia a hipótese de que as amostras do conjunto possuem variância iguais.
+# H0 : Todas as Variâncias são iguais na amostra (Não há FATORES). 
+# H1 : Pelo menos 2 das amostras possuem variância distinta (Há FATORES)
+# Se p_value < 5%, REJEITA-SE H0
+
+df_features = df[features_cols[0:-2]]
+bartlett, p_value = calculate_bartlett_sphericity(df_features)
+
+print(f'Bartlett statistic: {bartlett}')
+
+print(f'p-value : {p_value}')
+
+# Checando os número de Fatores construidos e seus AUTOVALORES
+fa = FactorAnalyzer()
+fa.fit(df_features)
+
+ev, v = fa.get_eigenvalues()
+print(ev)
+
+# Pelo critério da Raiz Latente, toma-se apenos fatores com 
+# AUTOVALORES >= 1 (Nesse caso, apenas os 3 primeiros)
+
+fa.set_params(n_factors = 3, method = 'principal', rotation = None)
+fa.fit(df_features)
+
+# Calculando Autovalores, Variancias, e Variancias Acm.
+eigen_fatores = fa.get_factor_variance() 
+
+tabela_eigen = pd.DataFrame(eigen_fatores)
+tabela_eigen.columns = [f"Fator {i+1}" for i, v in enumerate(tabela_eigen.columns)]
+tabela_eigen.index = ['Autovalor','Variância', 'Variância Acumulada']
+tabela_eigen = tabela_eigen.T
+tabela_eigen
+
+#%% Determinando as cargas fatoriais
+
+cargas_fatores = fa.loadings_
+
+tabela_cargas = pd.DataFrame(cargas_fatores)
+tabela_cargas.columns = [f"Fator {i+1}" for i, v in enumerate(tabela_cargas.columns)]
+tabela_cargas.index = df_features.columns
+tabela_cargas
+
+print(tabela_cargas)
+
+# Calculando as Comunalidades (% da Variancia total da feature que foi capturada nos fatores utilizados)
+comunalidades = fa.get_communalities()
+
+tabela_comunalidades = pd.DataFrame(comunalidades)
+tabela_comunalidades.columns = ['Comunalidades']
+tabela_comunalidades.index = df_features.columns
+tabela_comunalidades.sort_values(by='Comunalidades',ascending = True)
+
+# Calculando os Fatores para os observações do conjunto
+predict_fatores= pd.DataFrame(fa.transform(df_features))
+predict_fatores.columns =  [f"Fator {i+1}" for i, v in enumerate(predict_fatores.columns)]
+predict_fatores
+
+df = pd.concat([df.reset_index(drop=True), predict_fatores], axis=1) #Adicionando no dataset
+
+# Mensurando o Score de cada váriavel dentro dos respectivos fatores
+# através da memoria de calculo do predict
+
+scores = fa.weights_
+tabela_scores = pd.DataFrame(scores)
+tabela_scores.columns = [f"Fator {i+1}" for i, v in enumerate(tabela_scores.columns)]
+tabela_scores.index = df_features.columns
+tabela_scores
+
+# Checando a Correlação Entre Fatores
+corr_fator = pg.rcorr(df[['Fator 1','Fator 2','Fator 3']], method = 'pearson', upper = 'pval', decimals = 4, pval_stars = {0.01: '***', 0.05: '**', 0.10: '*'})
+print(corr_fator)
+
+# Calculando um Ranking, com base em : Predict Fator_x * Var. Fator_x
+
+
+df['Ranking'] = 0
+
+for index, item in enumerate(list(tabela_eigen.index)):
+    variancia = tabela_eigen.loc[item]['Variância']
+
+    df['Ranking'] = df['Ranking'] + df[tabela_eigen.index[index]]*variancia
+    
+
