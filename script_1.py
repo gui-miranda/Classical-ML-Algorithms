@@ -140,7 +140,7 @@ df_quartiles = df_quartiles.sort_values(by = 'qtd_outliers',ascending = False).r
 
 """ 3.1 Redução de Dimensionalidade - PCA """
 
-features_cols.append("critical_temp","material")
+features_cols.extend(["critical_temp","material"])
 df = df[features_cols]
 
 
@@ -180,8 +180,25 @@ tabela_eigen.index = ['Autovalor','Variância', 'Variância Acumulada']
 tabela_eigen = tabela_eigen.T
 tabela_eigen
 
-#%% Determinando as cargas fatoriais
+# Calculando os Fatores para os observações do conjunto
+predict_fatores= pd.DataFrame(fa.transform(df_features))
+predict_fatores.columns =  [f"Fator {i+1}" for i, v in enumerate(predict_fatores.columns)]
+predict_fatores
 
+df = pd.concat([df.reset_index(drop=True), predict_fatores], axis=1) #Adicionando no dataset
+
+# Mensurando o Score Fatorial de cada váriavel dentro dos respectivos fatores
+# através da memoria de calculo do predict
+
+scores = fa.weights_
+tabela_scores = pd.DataFrame(scores)
+tabela_scores.columns = [f"Fator {i+1}" for i, v in enumerate(tabela_scores.columns)]
+tabela_scores.index = df_features.columns
+tabela_scores
+
+
+
+# Calculando as Cargas Fatoriais
 cargas_fatores = fa.loadings_
 
 tabela_cargas = pd.DataFrame(cargas_fatores)
@@ -191,6 +208,8 @@ tabela_cargas
 
 print(tabela_cargas)
 
+
+
 # Calculando as Comunalidades (% da Variancia total da feature que foi capturada nos fatores utilizados)
 comunalidades = fa.get_communalities()
 
@@ -199,34 +218,65 @@ tabela_comunalidades.columns = ['Comunalidades']
 tabela_comunalidades.index = df_features.columns
 tabela_comunalidades.sort_values(by='Comunalidades',ascending = True)
 
-# Calculando os Fatores para os observações do conjunto
-predict_fatores= pd.DataFrame(fa.transform(df_features))
-predict_fatores.columns =  [f"Fator {i+1}" for i, v in enumerate(predict_fatores.columns)]
-predict_fatores
-
-df = pd.concat([df.reset_index(drop=True), predict_fatores], axis=1) #Adicionando no dataset
-
-# Mensurando o Score de cada váriavel dentro dos respectivos fatores
-# através da memoria de calculo do predict
-
-scores = fa.weights_
-tabela_scores = pd.DataFrame(scores)
-tabela_scores.columns = [f"Fator {i+1}" for i, v in enumerate(tabela_scores.columns)]
-tabela_scores.index = df_features.columns
-tabela_scores
 
 # Checando a Correlação Entre Fatores
 corr_fator = pg.rcorr(df[['Fator 1','Fator 2','Fator 3']], method = 'pearson', upper = 'pval', decimals = 4, pval_stars = {0.01: '***', 0.05: '**', 0.10: '*'})
 print(corr_fator)
 
+
+
+# Construindo o plot das Cargas Fatoriais para cada váriável 
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(12,8))
+
+tabela_cargas_chart = tabela_cargas.reset_index()
+
+plt.scatter(tabela_cargas_chart['Fator 1'], tabela_cargas_chart['Fator 2'], s=30)
+
+def label_point(x, y, val, ax):
+    a = pd.concat({'x': x, 'y': y, 'val': val}, axis=1)
+    for i, point in a.iterrows():
+        ax.text(point['x'] + 0.05, point['y'], point['val'])
+
+label_point(x = tabela_cargas_chart['Fator 1'],
+            y = tabela_cargas_chart['Fator 2'],
+            val = tabela_cargas_chart['index'],
+            ax = plt.gca()) 
+
+plt.axhline(y=0, color='black', ls='--')
+plt.axvline(x=0, color='black', ls='--')
+plt.ylim([-1.5,1.5])
+plt.xlim([-1.5,1.5])
+plt.title(f"{tabela_eigen.shape[0]} componentes principais que explicam {round(tabela_eigen['Variância'].sum()*100,2)}% da variância", fontsize=14)
+plt.xlabel(f"PC 1: {round(tabela_eigen.iloc[0]['Variância']*100,2)}% de variância explicada", fontsize=14)
+plt.ylabel(f"PC 2: {round(tabela_eigen.iloc[1]['Variância']*100,2)}% de variância explicada", fontsize=14)
+plt.show()
+   
+plt.savefig('Factorial_Loadings_Plot.png')
+
+# Gráfico da variância acumulada dos componentes principais
+plt.figure(figsize=(12,8))
+
+plt.title(f"{tabela_eigen.shape[0]} componentes principais que explicam {round(tabela_eigen['Variância'].sum()*100,2)}% da variância", fontsize=14)
+ax = sns.barplot(x=tabela_eigen.index, y=tabela_eigen['Variância'], data=tabela_eigen, color='green')
+
+ax.bar_label(ax.containers[0])
+plt.xlabel("Componentes principais", fontsize=14)
+plt.ylabel("Porcentagem de variância explicada (%)", fontsize=14)
+plt.show()
+
+
 # Calculando um Ranking, com base em : Predict Fator_x * Var. Fator_x
-
-
 df['Ranking'] = 0
 
 for index, item in enumerate(list(tabela_eigen.index)):
     variancia = tabela_eigen.loc[item]['Variância']
-
+    
     df['Ranking'] = df['Ranking'] + df[tabela_eigen.index[index]]*variancia
+     
+# 
+
+
     
 
