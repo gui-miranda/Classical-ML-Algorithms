@@ -1,0 +1,42 @@
+1 - Clustering 
+    
+    * Analise de agrupamentos se baseia fundamentalmente na determinação similaridades (ou dissimilaridades) entre obervações
+    de um banco de dados
+
+    * Aplica-se a variaveis métricas (numericas) ou binárias.
+
+    * Passo 0 é a determinação do escopo da análise, para consequente escolha de qual a "distância é a mais apropriada". Usualmente,
+    a distância euclidiana ou euclidiana quadrada são escolhidas (para o caso de dissimilaridades a de Minkowski é a mais comum)
+
+    * Passo 1 é determinar o método de encadeamento : Hierarquico (uma observação sendo ligada a outra sequncialmente)
+    ou Não Hierarquico (usualmente K-Means). 
+
+    
+    A - Agrupamento Hierarquico
+        O primeiro passo ao perfomar um agrupamento é determinar qual o tipo de encadeamento será utilizado. 
+        Usualmente adota-se um dos seguintes : 
+
+            Método de Encadeamento Único (Nearest Neighbor ou Single Linkage) : 
+                - MENOR distância entre observações 
+                - Recomendado para análise de observações razoavelmente NÃO HOMOGENEAS.
+
+            Método de Encadeamento Completo (Furthest Neighbor ou Complete Linkage) : 
+                - MAIOR distância entre observações 
+                - Recomendado para análise de observações razoavelmente HOMOGENEAS.
+
+
+            Método de Encadeamento Médio (Between Groups ou Average Linkage) : 
+                - MÉDIA da distância entre observações de um cluster e outras observações (toma-se a menor MÉDIA)
+
+        Após a formaçao dos clusters é importante observar o DENDOGRAMA para determinar o ponto 
+        ótimo de CUTTING (grande salto da distancia entre clusters)
+
+
+
+
+    B - Agrupamento Não Hierarquico
+
+        Nesse caso, os algoritmos Não Hierarquico iteram entre as observações otimizando a distância entre os centroides 
+        do clusters e ao mesmo tempo minimizando a dispersão das obervações dentro dos clusters. 
+        
+        Deve-se estimar previamente qual o numero de clusters desejados (Método do Elbow)
