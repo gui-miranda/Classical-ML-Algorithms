@@ -1,9 +1,13 @@
+Referencia Bibliografica : Manual de Analise de Dados (Favero) - Capitulo 9 | Pag 339
+
 1 - Clustering 
     
     * Analise de agrupamentos se baseia fundamentalmente na determinação similaridades (ou dissimilaridades) entre obervações
     de um banco de dados
 
     * Aplica-se a variaveis métricas (numericas) ou binárias.
+
+    * Para realização da analise, todas as variaveis metricas devem estar normalizadas (Z-Score)
 
     * Passo 0 é a determinação do escopo da análise, para consequente escolha de qual a "distância é a mais apropriada". Usualmente,
     a distância euclidiana ou euclidiana quadrada são escolhidas (para o caso de dissimilaridades a de Minkowski é a mais comum)
@@ -40,3 +44,10 @@
         do clusters e ao mesmo tempo minimizando a dispersão das obervações dentro dos clusters. 
         
         Deve-se estimar previamente qual o numero de clusters desejados (Método do Elbow)
+
+    * Em ambos os métodos de encadeamento, após a construção e determinação inicial dos clusters, é importante realizar uma 
+    "Análise de Variancia de um Fator" ou Estatistica F. 
+        - Essa medida, identifica as variáveis que mais contribuem para a formação de pelo menos um dos clusters, 
+        por possuírem média estatisticamente diferente em pelo menos um dos clusters em relação aos demais. 
+
+        - Pode ser calculada como : Variabilidade Entre Grupos / Variabilidade dentro dos Grupos

@@ -6,148 +6,191 @@ This is a temporary script file.
 """
 import pandas as pd
 import matplotlib.pyplot as plt
+
 import seaborn as sns
 import numpy as np
-from factor_analyzer import FactorAnalyzer
-from factor_analyzer.factor_analyzer import calculate_bartlett_sphericity
-import pingouin as pg
+
+
+from sklearn.cluster import AgglomerativeClustering , KMeans
+
+import scipy.stats as stats
+import scipy.cluster.hierarchy as sch
+
 
 """ 1. Ingestão dos Dados """
 database = pd.read_csv("transformed_data.csv")  # dataframe com as principais features
-columns = database.columns
-df = database
+df = database.drop("Unnamed: 0",axis=1)
+
+columns = df.columns
+
 """ 2. Algoritmos Não Supervisionados """
 
-""" 2.1 Redução de Dimensionalidade - PCA """
+""" 2.1 Clustering """
 
-# Testando a adequação e possibilidade de extração de componentes principais
-# nesse conjunto de dados, através do Teste de Bartllet.
-# O Teste de Bartllet avalia a hipótese de que as amostras do conjunto possuem variância iguais.
-# H0 : Todas as Variâncias são iguais na amostra (Não há FATORES). 
-# H1 : Pelo menos 2 das amostras possuem variância distinta (Há FATORES)
-# Se p_value < 5%, REJEITA-SE H0
+# Normalizando as variaveis métricas através do Z-Score (Médio 0 e Desvio P = 1)
 
-df_features = df[columns[0:-2]]
-bartlett, p_value = calculate_bartlett_sphericity(df_features)
+df_features = df[columns[1:-2]].sample(frac=1)
 
-print(f'Bartlett statistic: {bartlett}')
+for col in df_features.columns:
+    df_features.loc[:,col] = stats.zscore(df_features[col])
 
-print(f'p-value : {p_value}')
 
-# Checando os número de Fatores construidos e seus AUTOVALORES
-fa = FactorAnalyzer()
-fa.fit(df_features)
+""" Encadeamento Hierarquico (utilizando a distância Euclidiana) : """ 
 
-ev, v = fa.get_eigenvalues()
-print(ev)
-
-# Pelo critério da Raiz Latente, toma-se apenos fatores com 
-# AUTOVALORES >= 1 (Nesse caso, apenas os 3 primeiros)
-
-fa.set_params(n_factors = 3, method = 'principal', rotation = None)
-fa.fit(df_features)
-
-# Calculando Autovalores, Variancias, e Variancias Acm.
-eigen_fatores = fa.get_factor_variance() 
-
-tabela_eigen = pd.DataFrame(eigen_fatores)
-tabela_eigen.columns = [f"Fator {i+1}" for i, v in enumerate(tabela_eigen.columns)]
-tabela_eigen.index = ['Autovalor','Variância', 'Variância Acumulada']
-tabela_eigen = tabela_eigen.T
-tabela_eigen
-
-# Calculando os Fatores para os observações do conjunto
-predict_fatores= pd.DataFrame(fa.transform(df_features))
-predict_fatores.columns =  [f"Fator {i+1}" for i, v in enumerate(predict_fatores.columns)]
-predict_fatores
-
-df = pd.concat([df.reset_index(drop=True), predict_fatores], axis=1) #Adicionando no dataset
-
-# Mensurando o Score Fatorial de cada váriavel dentro dos respectivos fatores
-# através da memoria de calculo do predict
-
-scores = fa.weights_
-tabela_scores = pd.DataFrame(scores)
-tabela_scores.columns = [f"Fator {i+1}" for i, v in enumerate(tabela_scores.columns)]
-tabela_scores.index = df_features.columns
-tabela_scores
+# A - Nearest Neighbor  - Dendograma
+# plt.figure(figsize=(16,8))
+# dendrogram = sch.dendrogram(sch.linkage(df_features, method = 'single', metric = 'euclidean')) #labels = list(df_features.index))
+# plt.title('Dendrograma', fontsize=16)
+# plt.xlabel('Observacoes', fontsize=16)
+# plt.ylabel('Distância Euclidiana', fontsize=16)
+# plt.axhline(y = 4.5, color = 'red', linestyle = '--')
+# plt.show()
 
 
 
-# Calculando as Cargas Fatoriais
-cargas_fatores = fa.loadings_
-
-tabela_cargas = pd.DataFrame(cargas_fatores)
-tabela_cargas.columns = [f"Fator {i+1}" for i, v in enumerate(tabela_cargas.columns)]
-tabela_cargas.index = df_features.columns
-tabela_cargas
+# Utilizando o Input do Dendograma com uma Proposta de 4 Clusters
+cluster_sing = AgglomerativeClustering(n_clusters = 4, metric = 'euclidean', linkage = 'single')
+indica_cluster_sing = cluster_sing.fit_predict(df_features)
+df_features['cluster_single'] = indica_cluster_sing
 
 
+cluster_comp = AgglomerativeClustering(n_clusters = 4, metric = 'euclidean', linkage = 'complete')
+indica_cluster_comp = cluster_comp.fit_predict(df_features)
+df_features['cluster_complete'] = indica_cluster_comp
 
-# Calculando as Comunalidades (% da Variancia total da feature que foi capturada nos fatores utilizados)
-comunalidades = fa.get_communalities()
+cluster_avg = AgglomerativeClustering(n_clusters = 4, metric = 'euclidean', linkage = 'average')
+indica_cluster_avg = cluster_avg.fit_predict(df_features)
+df_features['cluster_average'] = indica_cluster_avg
 
-tabela_comunalidades = pd.DataFrame(comunalidades)
-tabela_comunalidades.columns = ['Comunalidades']
-tabela_comunalidades.index = df_features.columns
-tabela_comunalidades.sort_values(by='Comunalidades',ascending = True)
+gp_1 = df_features.groupby('cluster_single')['entropy_atomic_mass'].count()
+gp_2 = df_features.groupby('cluster_complete')['entropy_atomic_mass'].count()
+gp_3 = df_features.groupby('cluster_average')['entropy_atomic_mass'].count()
 
-
-# Checando a Correlação Entre Fatores
-corr_fator = pg.rcorr(df[['Fator 1','Fator 2','Fator 3']], method = 'pearson', upper = 'pval', decimals = 4, pval_stars = {0.01: '***', 0.05: '**', 0.10: '*'})
-print(corr_fator)
+print(gp_1,gp_2,gp_3)
 
 
+# Através da Análise dos Agrupamentos Hierarquicos, o método complete/average parecem ser os mais 
+# adequados, oque aponta para uma alta homogeniedade das observações
 
-# Construindo o plot das Cargas Fatoriais para cada váriável 
-import matplotlib.pyplot as plt
 
-plt.figure(figsize=(12,8))
+""" Encadeamento Não Hierarquico :  K-Means """ 
+# Iniciando com a estimativa inicial de 4 Clusters
+df_features = df.set_index('material')[columns[1:-2]] 
 
-tabela_cargas_chart = tabela_cargas.reset_index()
+for col in df_features.columns:
+    df_features.loc[:,col] = stats.zscore(df_features[col])
+    
+kmeans = KMeans(n_clusters = 4, init = 'random').fit(df_features)
+kmeans_clusters = kmeans.labels_
 
-plt.scatter(tabela_cargas_chart['Fator 1'], tabela_cargas_chart['Fator 2'], s=30)
 
-def label_point(x, y, val, ax):
-    a = pd.concat({'x': x, 'y': y, 'val': val}, axis=1)
-    for i, point in a.iterrows():
-        ax.text(point['x'] + 0.05, point['y'], point['val'])
+# Identificando as Centroides 
+centroides = pd.DataFrame(kmeans.cluster_centers_)
+centroides.columns = df_features.columns
+centroides.index.name = 'cluster'
+centroides
 
-label_point(x = tabela_cargas_chart['Fator 1'],
-            y = tabela_cargas_chart['Fator 2'],
-            val = tabela_cargas_chart['index'],
-            ax = plt.gca()) 
+temp = df_features
+temp['cluster_kmeans'] = kmeans_clusters
+gp_4 = temp.groupby('cluster_kmeans')['entropy_atomic_mass'].count()
+print(gp_4)
 
-plt.axhline(y=0, color='black', ls='--')
-plt.axvline(x=0, color='black', ls='--')
-plt.ylim([-1.5,1.5])
-plt.xlim([-1.5,1.5])
-plt.title(f"{tabela_eigen.shape[0]} componentes principais que explicam {round(tabela_eigen['Variância'].sum()*100,2)}% da variância", fontsize=14)
-plt.xlabel(f"PC 1: {round(tabela_eigen.iloc[0]['Variância']*100,2)}% de variância explicada", fontsize=14)
-plt.ylabel(f"PC 2: {round(tabela_eigen.iloc[1]['Variância']*100,2)}% de variância explicada", fontsize=14)
-plt.show()
-   
-plt.savefig('Factorial_Loadings_Plot.png')
 
-# Gráfico da variância acumulada dos componentes principais
-plt.figure(figsize=(12,8))
+# Método Elbow para identificação do nº de clusters
 
-plt.title(f"{tabela_eigen.shape[0]} componentes principais que explicam {round(tabela_eigen['Variância'].sum()*100,2)}% da variância", fontsize=14)
-ax = sns.barplot(x=tabela_eigen.index, y=tabela_eigen['Variância'], data=tabela_eigen, color='green')
+## Elaborado com base na "inércia": distância de cada obervação para o centróide de seu cluster
+## Quanto mais próximos entre si e do centróide, menor a inércia
 
-ax.bar_label(ax.containers[0])
-plt.xlabel("Componentes principais", fontsize=14)
-plt.ylabel("Porcentagem de variância explicada (%)", fontsize=14)
+inercias = []
+K = range(1,50)#,df.shape[0])
+for k in K:
+    kmeanModel = KMeans(n_clusters=k).fit(df_features)
+    inercias.append(kmeanModel.inertia_)
+    
+plt.figure(figsize=(16,8))
+plt.plot(K, inercias, 'bx-')
+plt.axhline(y = 20, color = 'red', linestyle = '--')
+plt.xlabel('Nº Clusters', fontsize=16)
+plt.ylabel('Inércias', fontsize=16)
+plt.title('Método do Elbow', fontsize=16)
 plt.show()
 
+# Adotando 5 Clusters como ponto Ótimo ! 
+kmeans = KMeans(n_clusters = 5, init = 'random').fit(df_features)
+kmeans_clusters = kmeans.labels_
 
-# Calculando um Ranking, com base em : Predict Fator_x * Var. Fator_x
-df['Ranking'] = 0
-
-for index, item in enumerate(list(tabela_eigen.index)):
-    variancia = tabela_eigen.loc[item]['Variância']
+# Construindo uma Análise de Variancia de um Fator ( TESTE F ) ! 
+def teste_f_kmeans(kmeans, dataframe):
     
-    df['Ranking'] = df['Ranking'] + df[tabela_eigen.index[index]]*variancia
+    variaveis = dataframe.columns
 
-    
+    centroides = pd.DataFrame(kmeans.cluster_centers_)
+    centroides.columns = dataframe.columns
+    centroides
 
+    df = dataframe[variaveis]
+
+    unique, counts = np.unique(kmeans.labels_, return_counts=True)
+
+    dic = dict(zip(unique, counts))
+
+    qnt_clusters = kmeans.n_clusters
+
+    observacoes = len(kmeans.labels_)
+
+    df['cluster'] = kmeans.labels_
+
+    output = []
+
+    for variavel in variaveis:
+
+        dic_var={'variavel':variavel}
+
+        # variabilidade entre os grupos
+
+        variabilidade_entre_grupos = np.sum([dic[index]*np.square(observacao - df[variavel].mean()) for index, observacao in enumerate(centroides[variavel])])/(qnt_clusters - 1)
+
+        dic_var['variabilidade_entre_grupos'] = variabilidade_entre_grupos
+
+        variabilidade_dentro_dos_grupos = 0
+
+        for grupo in unique:
+
+            grupo = df[df.cluster == grupo]
+
+            variabilidade_dentro_dos_grupos += np.sum([np.square(observacao - grupo[variavel].mean()) for observacao in grupo[variavel]])/(observacoes - qnt_clusters)
+
+        dic_var['variabilidade_dentro_dos_grupos'] = variabilidade_dentro_dos_grupos
+
+        dic_var['F'] =  dic_var['variabilidade_entre_grupos']/dic_var['variabilidade_dentro_dos_grupos']
+        
+        dic_var['sig F'] =  1 - stats.f.cdf(dic_var['F'], qnt_clusters - 1, observacoes - qnt_clusters)
+
+        output.append(dic_var)
+
+    df = pd.DataFrame(output)
+
+    return df
+
+output = teste_f_kmeans(kmeans,df_features)
+kmeans_clusters = kmeans.labels_
+
+# Conclusão : Aparentemente, todas as variaveis selecionadas mostraram sig Estatistica
+# na construção de pelo menos 1 cluster.
+
+# Analisando os Clusters Construidos e a Variável Alvo do Projeto "Temperatura Crítica"
+temp_1 = df_features
+temp_1['cluster_kmeans'] = kmeans_clusters
+temp_1 = temp_1[['cluster_kmeans']]
+
+temp_2 = df[['number_of_elements','critical_temp','material']].set_index("material")
+
+df_merge = temp_1.join(temp_2, on='material')
+
+# Realizando o Scatter Plot
+plt.figure(figsize=(10,5))
+sns.scatterplot(x='number_of_elements', y='critical_temp', data=df_merge, hue='cluster_kmeans', palette="viridis")
+#sns.scatterplot(x='cluster_kmeans', y='critical_temp', data=df_merge)
+
+plt.legend()
+plt.show()
